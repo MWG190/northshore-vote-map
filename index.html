@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Northshore Vote Map</title>
+  <meta name="description" content="Live map of early voting and Election Day locations in St. Tammany and Washington Parishes, Louisiana."/>
+  <meta name="theme-color" content="#12263A"/>
+  <meta property="og:title" content="Northshore Vote Map"/>
+  <meta property="og:description" content="Early voting and Election Day locations — St. Tammany and Washington Parishes."/>
+  <meta property="og:image" content="og.jpg"/>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,560;9..144,700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <style>
+    :root {
+      --navy:#12263a; --navy-deep:#0b1826; --ink:#1c1915; --cream:#f6f1e8;
+      --cream-2:#ece4d4; --gold:#d4a853; --gold-deep:#b8892d; --pine:#1f6b57;
+      --muted:#6b6458; --line:#d9d0c1; --paper:#fffdf8;
+      --display:"Fraunces", Georgia, serif; --sans:"Outfit","Segoe UI",sans-serif;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0}
+    body{font-family:var(--sans);background:var(--cream);color:var(--ink);-webkit-font-smoothing:antialiased}
+    button, [role=button]{cursor:pointer}
+    button{font-family:inherit}
+    a{color:inherit}
+    .app{display:flex;flex-direction:column;height:100dvh}
+    header{background:var(--navy);color:var(--cream);border-bottom:1px solid rgb(255 255 255 / .08);z-index:20}
+    .hdr{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 20px}
+    .kicker{margin:0;font-size:11px;font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:var(--gold)}
+    h1{margin:0;font-family:var(--display);font-size:28px;font-weight:600}
+    .geaux{display:none;height:44px;align-items:center;border-radius:999px;background:var(--gold);color:var(--navy);padding:0 16px;font-size:14px;font-weight:600;text-decoration:none}
+    .dates{display:flex;flex-wrap:wrap;gap:4px 16px;padding:8px 20px;border-top:1px solid rgb(255 255 255 / .1);font-size:12px;color:rgb(246 241 232 / .8)}
+    .dates strong{color:var(--gold);font-weight:600}
+    .body{display:flex;flex-direction:column;min-height:0;flex:1}
+    .mobile-filters{padding:12px 16px;background:var(--paper);border-bottom:1px solid var(--line)}
+    .map-wrap{position:relative;height:38vh;flex-shrink:0}
+    #map{height:100%;width:100%;background:var(--cream-2)}
+    .legend{position:absolute;left:12px;top:12px;background:rgb(255 253 248 / .92);padding:8px 12px;border-radius:8px;font-size:12px;box-shadow:0 1px 3px rgb(18 38 58 / .12);pointer-events:none}
+    .legend p{margin:0;display:flex;align-items:center;gap:8px}
+    .legend p+p{margin-top:4px}
+    .dot{width:10px;height:10px;border-radius:99px;display:inline-block}
+    aside{display:flex;flex-direction:column;min-height:0;flex:1;background:var(--paper);border-top:1px solid var(--line)}
+    .desk-filters{display:none;padding:12px 16px;border-bottom:1px solid var(--line)}
+    .search{display:flex;align-items:center;gap:8px;height:44px;padding:0 12px;border:1px solid var(--line);border-radius:12px;background:#fff}
+    .search input{flex:1;border:0;outline:0;font:inherit;font-size:14px;background:transparent}
+    .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+    .chip{height:32px;padding:0 12px;border-radius:999px;border:1px solid var(--line);background:#fff;font-size:12px;font-weight:600;color:var(--ink)}
+    .chip.on{background:var(--navy);color:var(--cream);border-color:var(--navy)}
+    .locate{height:32px;padding:0 12px;border-radius:999px;border:1px solid var(--navy);background:transparent;font-size:12px;font-weight:600;color:var(--navy)}
+    .meta{margin:8px 0 0;font-size:12px;color:var(--muted)}
+    .err{color:#9a3412}
+    .list{flex:1;overflow:auto;min-height:0}
+    .card{display:block;width:100%;text-align:left;padding:12px 16px;border:0;border-bottom:1px solid var(--line);background:transparent}
+    .card:hover{background:var(--cream)}
+    .card.sel{background:var(--cream-2)}
+    .badge{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:2px 6px;border-radius:999px;margin-right:6px}
+    .badge.ev{background:#f3e4c0;color:var(--gold-deep)}
+    .badge.ed{background:#dce8f0;color:var(--navy)}
+    .name{font-weight:600;font-size:14px;margin:4px 0 0}
+    .addr{margin:2px 0 0;font-size:12px;color:var(--muted)}
+    .miles{float:right;font-size:12px;color:var(--muted)}
+    .detail{padding:12px 16px;border-bottom:1px solid var(--line);background:var(--cream)}
+    .detail h2{margin:6px 0 0;font-family:var(--display);font-size:20px}
+    .detail a.dir{display:inline-flex;margin-top:10px;height:40px;align-items:center;padding:0 14px;border-radius:999px;background:var(--gold);color:var(--navy);font-weight:600;font-size:13px;text-decoration:none}
+    .ns-pin{display:flex;align-items:center;justify-content:center;filter:drop-shadow(0 2px 3px rgb(18 38 58 / .35))}
+    .ns-pin span{width:18px;height:18px;border-radius:999px;border:2px solid #fff;background:var(--navy)}
+    .ns-pin.is-ev span{background:var(--gold);width:20px;height:20px}
+    .ns-pin.is-wa.is-ed span{background:var(--pine)}
+    .ns-pin.is-selected span{width:24px;height:24px;border-width:3px}
+    .leaflet-container{font-family:var(--sans);background:var(--cream-2)}
+    @media(min-width:1024px){
+      .body{flex-direction:row}
+      .mobile-filters{display:none}
+      .desk-filters{display:block}
+      .map-wrap{height:auto;flex:1}
+      aside{width:400px;flex:none;border-top:0;border-right:1px solid var(--line);order:-1}
+      .geaux{display:inline-flex}
+      h1{font-size:30px}
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="hdr">
+        <div>
+          <p class="kicker">St. Tammany · Washington</p>
+          <h1>Northshore Vote Map</h1>
+        </div>
+        <a class="geaux" href="https://voterportal.sos.la.gov" target="_blank" rel="noreferrer">GeauxVote</a>
+      </div>
+      <div class="dates">
+        <span>Early voting <strong>October 20–27, 2026 (closed Sunday, Oct 25)</strong></span>
+        <span>Election Day <strong style="color:var(--cream)">Tuesday, November 3, 2026</strong> · 6:00 a.m. – 8:00 p.m.</span>
+      </div>
+    </header>
+    <div class="body">
+      <div class="mobile-filters" id="filters-m"></div>
+      <section class="map-wrap">
+        <div id="map"></div>
+        <div class="legend">
+          <p><span class="dot" style="background:var(--gold)"></span> Early voting</p>
+          <p><span class="dot" style="background:var(--navy)"></span> St. Tammany Election Day</p>
+          <p><span class="dot" style="background:var(--pine)"></span> Washington Election Day</p>
+        </div>
+      </section>
+      <aside>
+        <div class="desk-filters" id="filters-d"></div>
+        <div id="detail"></div>
+        <div class="list" id="list"></div>
+      </aside>
+    </div>
+  </div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const SITES = [{"id":"EV-ST-COV","kind":"early","parish":"St. Tammany","name":"St. Tammany Justice Center Parking Garage","address":"601 N. Jefferson Ave","suite":"","city":"Covington","zip":"70433","lat":30.479475,"lng":-90.097723,"hours":"Tue–Sat 8:30 a.m.–6:00 p.m. (closed Sunday)","days":"Full EV period","precincts":[],"phone":"985-809-5500","notes":"Across from the Justice Center, downtown Covington. Parish site and SOS both list this garage."},{"id":"EV-ST-SLI","kind":"early","parish":"St. Tammany","name":"The Towers Building","address":"520 Old Spanish Trail","suite":"Suite 2F / 1st floor conference training area","city":"Slidell","zip":"70458","lat":30.264745,"lng":-89.783991,"hours":"Tue–Sat 8:30 a.m.–6:00 p.m. (closed Sunday)","days":"Full EV period","precincts":[],"phone":"985-646-4125","notes":"SOS list: Suite 2F. Parish ROV site: first-floor conference training area. Confirm room on first day of EV and post a sign-team note."},{"id":"EV-ST-MAN","kind":"early","parish":"St. Tammany","name":"St. Tammany Administrative Complex  -  Council Chambers (Building A)","address":"21490 Koop Dr","suite":"Building A, first building on the left","city":"Mandeville","zip":"70471","lat":30.418333,"lng":-90.04237,"hours":"Tue–Sat 8:30 a.m.–6:00 p.m. (closed Sunday)","days":"Full EV period","precincts":[],"phone":"985-809-5500","notes":"Hwy 59 administrative complex. Council Chambers. Parish and SOS both list this site."},{"id":"EV-WA-FRK","kind":"early","parish":"Washington","name":"Washington Parish Courthouse","address":"900 Washington St","suite":"Registrar of Voters, Suite 3 / courthouse","city":"Franklinton","zip":"70438","lat":30.844288,"lng":-90.155699,"hours":"Mon–Sat 8:30 a.m.–6:00 p.m. (closed Sunday and legal holidays)","days":"Full EV period","precincts":[],"phone":"985-839-7850","notes":"Primary parish EV location and ROV office. Used every cycle."},{"id":"EV-WA-BOG","kind":"early","parish":"Washington","name":"Northshore Technical College (Vo-Tech)","address":"1710 Sullivan Drive","suite":"","city":"Bogalusa","zip":"70427","lat":30.760593,"lng":-89.847531,"hours":"Mon–Sat 8:30 a.m.–6:00 p.m. when open (closed Sunday and legal holidays)","days":"Confirm days with ROV","precincts":[],"phone":"985-839-7850","notes":"Satellite EV site. SOS list marks some satellites as “may be open limited dates.” Confirm days with ROV before staffing."},{"id":"ST-ED-001","kind":"election-day","parish":"St. Tammany","name":"WARD 1 COMMUNITY BUILDING","address":"13055 Hwy 190","suite":"","city":"Goodbee","zip":"70435","lat":30.501223,"lng":-90.199681,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["101","108"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-002","kind":"election-day","parish":"St. Tammany","name":"MADISONVILLE JUNIOR HIGH","address":"106 Cedar St","suite":"","city":"Madisonville","zip":"70447","lat":30.41198,"lng":-90.158971,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["102","MD1"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-003","kind":"election-day","parish":"St. Tammany","name":"MADISONVILLE ELEMENTARY SCHOOL","address":"317 Hwy 1077","suite":"","city":"Madisonville","zip":"70447","lat":30.434545,"lng":-90.165909,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["103","104","107","113"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-004","kind":"election-day","parish":"St. Tammany","name":"WEST ST. TAMMANY YMCA","address":"71256 Francis Rd.","suite":"","city":"Covington","zip":"70433","lat":30.467507,"lng":-90.150478,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["105","115"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-005","kind":"election-day","parish":"St. Tammany","name":"COQUILLE PARKS AND REC DIST 14","address":"13505 Hwy. 1085","suite":"","city":"Covington","zip":"70433","lat":30.45823,"lng":-90.131099,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["106","106A","118"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-006","kind":"election-day","parish":"St. Tammany","name":"WILLIAM PITCHER JR HIGH SCHOOL","address":"415 S Jefferson St","suite":"","city":"Covington","zip":"70433","lat":30.472627,"lng":-90.102976,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["110","C02","C03"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-007","kind":"election-day","parish":"St. Tammany","name":"JB LANCASTER ELEMENTARY SCHOOL","address":"133 Pine Creek Dr","suite":"","city":"Madisonville","zip":"70447","lat":30.431344,"lng":-90.197106,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["111","112","114","116"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-008","kind":"election-day","parish":"St. Tammany","name":"FOLSOM ELEMENTARY SCHOOL","address":"82144 Hwy 25","suite":"","city":"Folsom","zip":"70437","lat":30.625451,"lng":-90.186199,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["201","202","207","F01"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-009","kind":"election-day","parish":"St. Tammany","name":"LEE ROAD JR HIGH SCHOOL","address":"79131 Hwy 40","suite":"","city":"Covington","zip":"70433","lat":30.5482,"lng":-90.0704,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["203","206"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-010","kind":"election-day","parish":"St. Tammany","name":"VILLAGE OF FOLSOM CITY HALL","address":"82378 June St.","suite":"","city":"Folsom","zip":"70437","lat":30.630502,"lng":-90.186507,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["204"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-011","kind":"election-day","parish":"St. Tammany","name":"FIRE PRO DIST 6 STATION 3","address":"22310 Hwy 40","suite":"","city":"Bush","zip":"70431","lat":30.624675,"lng":-90.045061,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["205"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-012","kind":"election-day","parish":"St. Tammany","name":"WALLACE M POOLE FIRE STATION","address":"74450 Hwy 25","suite":"","city":"Covington","zip":"70433","lat":30.518832,"lng":-90.12068,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["301"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-013","kind":"election-day","parish":"St. Tammany","name":"LYON ELEMENTARY SCHOOL","address":"1615 N Florida St","suite":"","city":"Covington","zip":"70433","lat":30.489732,"lng":-90.096434,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["302","303","C09"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-014","kind":"election-day","parish":"St. Tammany","name":"HWY 36 FIRE STATION","address":"19375 Hwy 36","suite":"","city":"Covington","zip":"70433","lat":30.479656,"lng":-90.08236,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["304"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-015","kind":"election-day","parish":"St. Tammany","name":"ST TAMMANY EDUCATIONAL CENTER","address":"71460 Edna St","suite":"","city":"Covington","zip":"70433","lat":30.471165,"lng":-90.084169,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["305","308"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-016","kind":"election-day","parish":"St. Tammany","name":"NORTHPARK FIRE STATION","address":"115 Northpark Blvd","suite":"","city":"Covington","zip":"70433","lat":30.442532,"lng":-90.085904,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["306","310"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-017","kind":"election-day","parish":"St. Tammany","name":"NORTHLAKE CHRISTIAN SCHOOL","address":"70104 Wolverine Dr","suite":"","city":"Covington","zip":"70433","lat":30.450146,"lng":-90.091301,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["307","312","312A","313"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-018","kind":"election-day","parish":"St. Tammany","name":"TRINITY CHURCH","address":"19380 N 10Th St","suite":"","city":"Covington","zip":"70433","lat":30.464853,"lng":-90.08208,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["309"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-019","kind":"election-day","parish":"St. Tammany","name":"COVINGTON HIGH SCHOOL","address":"73030 Lion Dr","suite":"","city":"Covington","zip":"70433","lat":30.494033,"lng":-90.133791,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["314","C01","C11"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-020","kind":"election-day","parish":"St. Tammany","name":"PONTCHARTRAIN ELEM SCHOOL","address":"1500 W Causeway Approach","suite":"","city":"Mandeville","zip":"70471","lat":30.392003,"lng":-90.101206,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["401","402","M08","M12"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-021","kind":"election-day","parish":"St. Tammany","name":"MANDEVILLE CITY HALL","address":"3101 E Causeway Approach","suite":"","city":"Mandeville","zip":"70471","lat":30.374017,"lng":-90.078226,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["403","410"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-022","kind":"election-day","parish":"St. Tammany","name":"TCHEFUNCTE MIDDLE SCHOOL","address":"1530 W Causeway Approach","suite":"","city":"Mandeville","zip":"70471","lat":30.390589,"lng":-90.100273,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["404","418","M06","M11"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-023","kind":"election-day","parish":"St. Tammany","name":"ST TAM PAR HWY 59 ADM COMPLEX","address":"21490 Koop Dr","suite":"","city":"Mandeville","zip":"70471","lat":30.418513,"lng":-90.04202,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["405","406","420","429"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-024","kind":"election-day","parish":"St. Tammany","name":"ST TIMOTHY'S UNT METH CHURCH","address":"335 Asbury Dr","suite":"","city":"Mandeville","zip":"70471","lat":30.393825,"lng":-90.083462,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["407","415","416","417"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-025","kind":"election-day","parish":"St. Tammany","name":"MAGNOLIA TRACE ELEMENTARY SCHOOL","address":"1405 Hwy 1088","suite":"","city":"Mandeville","zip":"70471","lat":30.3894,"lng":-90.0126,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["408","414","427"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-026","kind":"election-day","parish":"St. Tammany","name":"MONTELEONE JR HIGH SCHOOL","address":"63000 Blue Marlin Dr","suite":"","city":"Mandeville","zip":"70471","lat":30.341178,"lng":-90.007564,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["409"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-027","kind":"election-day","parish":"St. Tammany","name":"LAKE HARBOR MIDDLE SCHOOL","address":"1700 Viola St","suite":"","city":"Mandeville","zip":"70471","lat":30.383378,"lng":-90.041122,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["411","426","430"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-028","kind":"election-day","parish":"St. Tammany","name":"MANDEVILLE MIDDLE SCHOOL","address":"2525 Soult St","suite":"","city":"Mandeville","zip":"70471","lat":30.374311,"lng":-90.032341,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["412","422","M09","M09A","M10"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-029","kind":"election-day","parish":"St. Tammany","name":"MANDEVILLE HIGH SCHOOL","address":"1 Skipper Dr","suite":"","city":"Mandeville","zip":"70471","lat":30.381532,"lng":-90.099576,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["413","419","421","M01"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-030","kind":"election-day","parish":"St. Tammany","name":"SUN TOWN HALL","address":"30285 Lock #3 Rd","suite":"","city":"Sun","zip":"70463","lat":30.6518,"lng":-89.9002,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["501"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-031","kind":"election-day","parish":"St. Tammany","name":"RECREATION DISTRICT NO. 2 GYMNASIUM","address":"30100 Crawford Cemetery Rd.","suite":"","city":"Bush","zip":"70431","lat":30.600661,"lng":-89.89698,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["502","503"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-032","kind":"election-day","parish":"St. Tammany","name":"R C MILLING FIRE STATION","address":"75174 Hwy 1083","suite":"","city":"Covington","zip":"70433","lat":30.533006,"lng":-90.006635,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["504","505"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-033","kind":"election-day","parish":"St. Tammany","name":"SIXTH WARD VOL FIRE STATION","address":"73469 Hwy 41","suite":"","city":"Pearl River","zip":"70452","lat":30.502064,"lng":-89.815643,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["602"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-034","kind":"election-day","parish":"St. Tammany","name":"REC DIST 7 COMMUNITY CENTER","address":"67835 Hwy 41","suite":"","city":"Pearl River","zip":"70452","lat":30.413713,"lng":-89.782113,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["603","604","606"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-035","kind":"election-day","parish":"St. Tammany","name":"ST TAMMANY ANIMAL SERV COMPLEX","address":"31078 Hwy 36","suite":"","city":"Lacombe","zip":"70445","lat":30.3148,"lng":-89.9084,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["605","609"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-036","kind":"election-day","parish":"St. Tammany","name":"BAYOU LACOMBE MIDDLE","address":"27527 St Joseph St","suite":"","city":"Lacombe","zip":"70445","lat":30.315111,"lng":-89.944114,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["701","702","706"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-037","kind":"election-day","parish":"St. Tammany","name":"ST. TAMMANY REC DIST #4 GYM","address":"61100 N. 12Th St.","suite":"","city":"Lacombe","zip":"70445","lat":30.3234,"lng":-89.9311,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["703","704"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-038","kind":"election-day","parish":"St. Tammany","name":"BAYOU WOODS ELEMENTARY SCHOOL","address":"35614 Liberty Dr","suite":"","city":"Slidell","zip":"70458","lat":30.28755,"lng":-89.805741,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["705","905","906","917","S07"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-039","kind":"election-day","parish":"St. Tammany","name":"ST TAMMANY LEVEE BOARD BLDG","address":"61134 Hwy 1090","suite":"","city":"Slidell","zip":"70458","lat":30.321655,"lng":-89.732324,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["801","804"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-040","kind":"election-day","parish":"St. Tammany","name":"CLEARWOOD JR HIGH SCHOOL","address":"130 Clearwood Dr","suite":"","city":"Slidell","zip":"70458","lat":30.311764,"lng":-89.753877,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["802","802A","803"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-041","kind":"election-day","parish":"St. Tammany","name":"LITTLE OAK MIDDLE SCHOOL","address":"59241 Rebel Dr","suite":"","city":"Slidell","zip":"70458","lat":30.290644,"lng":-89.737792,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["805","816"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-042","kind":"election-day","parish":"St. Tammany","name":"BOYET JR HIGH SCHOOL","address":"59295 Rebel Dr","suite":"","city":"Slidell","zip":"70458","lat":30.291844,"lng":-89.737796,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["806","811","812"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-043","kind":"election-day","parish":"St. Tammany","name":"CYPRESS COVE ELEMENTARY SCHOOL","address":"540 S Military Rd","suite":"","city":"Slidell","zip":"70458","lat":30.275756,"lng":-89.718522,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["807","817"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-044","kind":"election-day","parish":"St. Tammany","name":"HONEY ISLAND ELEMENTARY SCHOOL","address":"500 S Military Rd","suite":"","city":"Slidell","zip":"70458","lat":30.2761,"lng":-89.719,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["808","810","918"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-045","kind":"election-day","parish":"St. Tammany","name":"NORTHSHORE HIGH SCHOOL","address":"100 Panther Dr","suite":"","city":"Slidell","zip":"70458","lat":30.268114,"lng":-89.744895,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["809","813","818","S21"],"phone":"985-809-5500","notes":"818: Moved from Towers Building to Northshore High School (as of Jan 20, 2026 parish notice)"},{"id":"ST-ED-046","kind":"election-day","parish":"St. Tammany","name":"ST TAMMANY JUNIOR HIGH SCHOOL","address":"701 Cleveland Ave","suite":"","city":"Slidell","zip":"70458","lat":30.268293,"lng":-89.78036,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["814","S13","S24"],"phone":"985-809-5500","notes":"814: Moved from Towers Building to St. Tammany Junior High (as of Jan 20, 2026 parish notice)"},{"id":"ST-ED-047","kind":"election-day","parish":"St. Tammany","name":"WHISPERING FOREST ELEMENTARY SCHOOL","address":"38374 Spiehler Rd","suite":"","city":"Slidell","zip":"70458","lat":30.318908,"lng":-89.761117,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["815","815A"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-048","kind":"election-day","parish":"St. Tammany","name":"MOSQUITO ABATEMENT DIST. BLDG.","address":"62436 Airport Rd.","suite":"","city":"Slidell","zip":"70458","lat":30.3496,"lng":-89.8224,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["901","913","915"],"phone":"985-809-5500","notes":"901: Moved from True Life Church to Mosquito Abatement Dist. Bldg. (as of Jan 20, 2026) | 913: Moved from True Life Church to Mosquito Abatement Dist. Bldg. (as of Jan 20, 2026) | 915: Moved from True Life Church to Mosquito Abatement Dist. Bldg. (as of Jan 20, 2026)"},{"id":"ST-ED-049","kind":"election-day","parish":"St. Tammany","name":"ALTON ELEMENTARY SCHOOL","address":"38276 N 5Th St","suite":"","city":"Slidell","zip":"70458","lat":30.3328,"lng":-89.7641,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["902","914"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-050","kind":"election-day","parish":"St. Tammany","name":"PEARL RIVER HIGH SCHOOL","address":"39110 Rebel Ln","suite":"","city":"Pearl River","zip":"70452","lat":30.370753,"lng":-89.757565,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["903","903A"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-051","kind":"election-day","parish":"St. Tammany","name":"CAROLYN PARK MIDDLE SCHOOL","address":"35708 Liberty Dr","suite":"","city":"Slidell","zip":"70458","lat":30.287415,"lng":-89.803571,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["904","907","916","S06"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-052","kind":"election-day","parish":"St. Tammany","name":"SALMEN HIGH SCHOOL","address":"300 Spartan Dr","suite":"","city":"Slidell","zip":"70458","lat":30.245371,"lng":-89.787161,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["908","909","909A","910","911","S17"],"phone":"985-809-5500","notes":"909A: Parish notice: old 909A related to 908 & 909A at Salmen High School"},{"id":"ST-ED-053","kind":"election-day","parish":"St. Tammany","name":"ABNEY ELEMENTARY SCHOOL","address":"825 Kostmayer St","suite":"","city":"Slidell","zip":"70458","lat":30.257965,"lng":-89.777686,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["921","S16","S18","S22"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-054","kind":"election-day","parish":"St. Tammany","name":"TOWERS BUILDING","address":"520 Old Spanish Trl","suite":"","city":"Slidell","zip":"70458","lat":30.264925,"lng":-89.783641,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["922","S15"],"phone":"985-809-5500","notes":"922: Moved from Salmen High School to Towers Building (as of Jan 20, 2026) | S15: Moved from Salmen High School to Towers Building (as of Jan 20, 2026)"},{"id":"ST-ED-055","kind":"election-day","parish":"St. Tammany","name":"ABITA SPRINGS MIDDLE SCHOOL","address":"72079 Maple St.","suite":"","city":"Abita Springs","zip":"70420","lat":30.478012,"lng":-90.037609,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["A01","A02A","A04"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-056","kind":"election-day","parish":"St. Tammany","name":"ABITA SPRINGS ELEM SCHOOL","address":"22410 Level St","suite":"","city":"Abita Springs","zip":"70420","lat":30.478233,"lng":-90.02796,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["A02","A03"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-057","kind":"election-day","parish":"St. Tammany","name":"ST TAMMANY EMERGENCY OPERATIONS CENTER","address":"510 E Boston St","suite":"","city":"Covington","zip":"70433","lat":30.475703,"lng":-90.094919,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["C04"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-058","kind":"election-day","parish":"St. Tammany","name":"JUSTICE CENTER PARKING GARAGE","address":"601 N Jefferson Ave","suite":"","city":"Covington","zip":"70433","lat":30.479655,"lng":-90.097373,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["C06","C07","C08"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-059","kind":"election-day","parish":"St. Tammany","name":"MANDEVILLE ELEMENTARY SCHOOL","address":"519 Massena St","suite":"","city":"Mandeville","zip":"70471","lat":30.369413,"lng":-90.08003,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["M02","M07"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-060","kind":"election-day","parish":"St. Tammany","name":"WOODLAKE ELEMENTARY SCHOOL","address":"1620 Livingston St","suite":"","city":"Mandeville","zip":"70471","lat":30.357059,"lng":-90.059493,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["M04"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-061","kind":"election-day","parish":"St. Tammany","name":"PEARL RIVER COMMUNITY CENTER","address":"39443 Hwy 41 Spur","suite":"","city":"Pearl River","zip":"70452","lat":30.37657,"lng":-89.747476,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["P01"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-062","kind":"election-day","parish":"St. Tammany","name":"JOHN SLIDELL PARK GYMNASIUM","address":"105 Robert Blvd","suite":"","city":"Slidell","zip":"70458","lat":30.272846,"lng":-89.784714,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["S01","S05"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-063","kind":"election-day","parish":"St. Tammany","name":"SLIDELL HIGH SCHOOL","address":"1 Tiger Dr","suite":"","city":"Slidell","zip":"70458","lat":30.285763,"lng":-89.773785,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["S02","S03","S19"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-064","kind":"election-day","parish":"St. Tammany","name":"BONNE ECOLE ELEMENTARY SCHOOL","address":"900 Rue Verand","suite":"","city":"Slidell","zip":"70458","lat":30.290528,"lng":-89.767116,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["S04","S08","S09"],"phone":"985-809-5500","notes":""},{"id":"ST-ED-065","kind":"election-day","parish":"St. Tammany","name":"SLIDELL JR HIGH SCHOOL","address":"333 Pennsylvania Ave","suite":"","city":"Slidell","zip":"70458","lat":30.28068,"lng":-89.778416,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["S10","S11","S23"],"phone":"985-809-5500","notes":""},{"id":"WA-ED-001","kind":"election-day","parish":"Washington","name":"Experiment Station","address":"41217 Bethel Road","suite":"","city":"Franklinton","zip":"70438","lat":30.78381,"lng":-90.207471,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["01/01"],"phone":"985-839-7850","notes":""},{"id":"WA-ED-002","kind":"election-day","parish":"Washington","name":"Bonner Creek Fire Station","address":"43139 C E Stafford Road","suite":"","city":"Franklinton","zip":"70438","lat":30.713355,"lng":-90.178412,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["01/02"],"phone":"985-839-7850","notes":""},{"id":"WA-ED-003","kind":"election-day","parish":"Washington","name":"Ruritan National Club","address":"36101 Tennis Court Road","suite":"","city":"Mt Hermon","zip":"70450","lat":30.954461,"lng":-90.295253,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["02/01"],"phone":"985-839-7850","notes":""},{"id":"WA-ED-004","kind":"election-day","parish":"Washington","name":"School Board Office","address":"800 Main Street","suite":"","city":"Franklinton","zip":"70438","lat":30.84876,"lng":-90.15864,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["03/01"],"phone":"985-839-7850","notes":""},{"id":"WA-ED-005","kind":"election-day","parish":"Washington","name":"Franklinton Junior High School Gym","address":"617 Main Street","suite":"","city":"Franklinton","zip":"70438","lat":30.849834,"lng":-90.159036,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["03/02","03/03A","03/03B"],"phone":"985-839-7850","notes":""},{"id":"WA-ED-006","kind":"election-day","parish":"Washington","name":"Franklinton High School","address":"1 Demon Circle","suite":"","city":"Franklinton","zip":"70438","lat":30.858576,"lng":-90.123803,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["03/03","03/03C"],"phone":"985-839-7850","notes":""},{"id":"WA-ED-007","kind":"election-day","parish":"Washington","name":"Columbia Street Fire Station","address":"300 E Fifth Street","suite":"","city":"Bogalusa","zip":"70427","lat":30.775299,"lng":-89.857846,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["04/01","04/02A"],"phone":"985-839-7850","notes":""},{"id":"WA-ED-008","kind":"election-day","parish":"Washington","name":"St Paul AME Church Hall","address":"420 Church Street","suite":"","city":"Bogalusa","zip":"70427","lat":30.797811,"lng":-89.85591,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["04/01A"],"phone":"985-839-7850","notes":""},{"id":"WA-ED-009","kind":"election-day","parish":"Washington","name":"Byrd Avenue School","address":"1600 Byrd Avenue","suite":"","city":"Bogalusa","zip":"70427","lat":30.759613,"lng":-89.861807,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["04/03"],"phone":"985-839-7850","notes":""},{"id":"WA-ED-010","kind":"election-day","parish":"Washington","name":"Northshore Technical College","address":"1710 Sullivan Road","suite":"","city":"Bogalusa","zip":"70427","lat":30.760773,"lng":-89.847181,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["04/03B"],"phone":"985-839-7850","notes":"Also an early-voting satellite"},{"id":"WA-ED-011","kind":"election-day","parish":"Washington","name":"Bogalusa High School Boys' Gym","address":"100 MJ Israel Drive","suite":"","city":"Bogalusa","zip":"70427","lat":30.779643,"lng":-89.865992,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["04/04"],"phone":"985-839-7850","notes":""},{"id":"WA-ED-012","kind":"election-day","parish":"Washington","name":"Bogalusa High School Girls' Gym","address":"100 MJ Israel Drive","suite":"","city":"Bogalusa","zip":"70427","lat":30.779823,"lng":-89.865642,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["04/05","04/05B","04/06"],"phone":"985-839-7850","notes":""},{"id":"WA-ED-013","kind":"election-day","parish":"Washington","name":"Pleasant Hill Fire Station","address":"500 West 8th Street","suite":"","city":"Bogalusa","zip":"70427","lat":30.772627,"lng":-89.871277,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["04/07","04/07B"],"phone":"985-839-7850","notes":""},{"id":"WA-ED-014","kind":"election-day","parish":"Washington","name":"Lakeview Voting Building","address":"1613 Highway 10 East","suite":"","city":"Bogalusa","zip":"70427","lat":30.803096,"lng":-89.892877,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["04/08"],"phone":"985-839-7850","notes":""},{"id":"WA-ED-015","kind":"election-day","parish":"Washington","name":"District 7 Fire Station (Bens Ford)","address":"17380 Bill Booty Rd.","suite":"","city":"Bogalusa","zip":"70427","lat":30.780321,"lng":-89.91566,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["04/09","04/09A"],"phone":"985-839-7850","notes":"MOVED Oct 2025 from Denhamtown Elementary, 1101 Avenue M | MOVED Oct 2025 from Denhamtown Elementary, 1101 Avenue M"},{"id":"WA-ED-016","kind":"election-day","parish":"Washington","name":"Palestine Baptist Church Hall","address":"59369 Palestine Church Road","suite":"","city":"Bogalusa","zip":"70427","lat":30.69337,"lng":-89.894104,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["04/10","04/10A","04/11"],"phone":"985-839-7850","notes":""},{"id":"WA-ED-017","kind":"election-day","parish":"Washington","name":"Varnado Fire Station","address":"26021 Highway 21","suite":"","city":"Angie","zip":"70426","lat":30.897941,"lng":-89.834294,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["05/01","05/03"],"phone":"985-839-7850","notes":""},{"id":"WA-ED-018","kind":"election-day","parish":"Washington","name":"YACC Building-Sheridan","address":"53052 YACC Road","suite":"","city":"Bogalusa","zip":"70427","lat":30.8489,"lng":-89.8762,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["05/02"],"phone":"985-839-7850","notes":""},{"id":"WA-ED-019","kind":"election-day","parish":"Washington","name":"District 8 Fire Station-Hwy 16","address":"17610 Highway 16","suite":"","city":"Franklinton","zip":"70438","lat":30.758668,"lng":-90.257438,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["06/01","06/03"],"phone":"985-839-7850","notes":""},{"id":"WA-ED-020","kind":"election-day","parish":"Washington","name":"District 7 Fire Station-Isabelle","address":"12196 South Choctaw Road","suite":"","city":"Bogalusa","zip":"70427","lat":30.700423,"lng":-89.990904,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["06/02"],"phone":"985-839-7850","notes":""},{"id":"WA-ED-021","kind":"election-day","parish":"Washington","name":"Plainview Baptist Church Hall","address":"55179 Highway 60","suite":"","city":"Bogalusa","zip":"70427","lat":30.74668,"lng":-89.987685,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["06/04"],"phone":"985-839-7850","notes":""},{"id":"WA-ED-022","kind":"election-day","parish":"Washington","name":"Angie Fire Station","address":"30162 Highway 21","suite":"","city":"Angie","zip":"70426","lat":30.960771,"lng":-89.811742,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["07/01","07/01A","07/03"],"phone":"985-839-7850","notes":""},{"id":"WA-ED-023","kind":"election-day","parish":"Washington","name":"District 4 Fire Station-Stateline","address":"56145 Mill Road","suite":"","city":"Franklinton","zip":"70438","lat":30.9784,"lng":-90.0468,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["07/02"],"phone":"985-839-7850","notes":""},{"id":"WA-ED-024","kind":"election-day","parish":"Washington","name":"District 3 Fire Station-Hackley","address":"29468 Highway 430","suite":"","city":"Franklinton","zip":"70438","lat":30.955417,"lng":-90.089827,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["08/01"],"phone":"985-839-7850","notes":""},{"id":"WA-ED-025","kind":"election-day","parish":"Washington","name":"New Jerusalem Baptist Church Hall","address":"44030 Max Brumfield Road","suite":"","city":"Franklinton","zip":"70438","lat":30.928353,"lng":-90.157222,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["08/02"],"phone":"985-839-7850","notes":""},{"id":"WA-ED-026","kind":"election-day","parish":"Washington","name":"Thomas Junior High School","address":"30341 Highway 424","suite":"","city":"Franklinton","zip":"70438","lat":30.963821,"lng":-90.028871,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["08/03"],"phone":"985-839-7850","notes":""},{"id":"WA-ED-027","kind":"election-day","parish":"Washington","name":"District 2 Fire Station-Richardson","address":"39618 Highway 10","suite":"","city":"Franklinton","zip":"70438","lat":30.831507,"lng":-90.23366,"hours":"6:00 a.m. – 8:00 p.m.","days":"Election Day only","precincts":["09/01"],"phone":"985-839-7850","notes":""}];
+    const ELECTION = {"dateLabel":"Tuesday, November 3, 2026","dateIso":"2026-11-03","evStart":"2026-10-20","evEnd":"2026-10-27","evWindow":"October 20–27, 2026 (closed Sunday, Oct 25)","evHours":"8:30 a.m. – 6:00 p.m.","edHoursTue":"6:00 a.m. – 8:00 p.m.","nextElection":"Saturday, December 12, 2026","geauxVote":"https://voterportal.sos.la.gov"};
+    const state = { query:"", kind:"all", parish:"all", selectedId:null, userLoc:null, locError:null };
+    let map, layer;
+
+    function miles(a,b){
+      const R=3958.8, toR=x=>x*Math.PI/180;
+      const dLat=toR(b.lat-a.lat), dLng=toR(b.lng-a.lng);
+      const s=Math.sin(dLat/2)**2+Math.cos(toR(a.lat))*Math.cos(toR(b.lat))*Math.sin(dLng/2)**2;
+      return 2*R*Math.asin(Math.min(1,Math.sqrt(s)));
+    }
+    function filtered(){
+      const q=state.query.trim().toLowerCase();
+      let rows=SITES.filter(s=>{
+        if(state.kind!=="all" && s.kind!==state.kind) return false;
+        if(state.parish!=="all" && s.parish!==state.parish) return false;
+        if(!q) return true;
+        return (s.name+" "+s.address+" "+s.city+" "+s.precincts.join(" ")+" "+s.zip).toLowerCase().includes(q);
+      });
+      if(state.userLoc){
+        rows=rows.map(s=>({...s, miles:miles(state.userLoc,s)})).sort((a,b)=>a.miles-b.miles);
+      }
+      return rows;
+    }
+    function chip(label,on,fn){
+      const b=document.createElement("button");
+      b.className="chip"+(on?" on":"");
+      b.textContent=label;
+      b.onclick=fn;
+      return b;
+    }
+    function filtersEl(){
+      const wrap=document.createElement("div");
+      const ev=SITES.filter(s=>s.kind==="early").length;
+      const ed=SITES.filter(s=>s.kind==="election-day").length;
+      const search=document.createElement("div");
+      search.className="search";
+      search.innerHTML='<svg width="16" height="16" fill="none" stroke="#6b6458" stroke-width="2"><circle cx="7" cy="7" r="5"/><path d="M11 11l3 3"/></svg>';
+      const input=document.createElement("input");
+      input.placeholder="Search site, city, precinct…";
+      input.value=state.query;
+      input.oninput=e=>{state.query=e.target.value; render()};
+      search.appendChild(input);
+      wrap.appendChild(search);
+      const chips=document.createElement("div"); chips.className="chips";
+      chips.append(
+        chip("All sites", state.kind==="all", ()=>{state.kind="all"; render()}),
+        chip("Early voting · "+ev, state.kind==="early", ()=>{state.kind="early"; render()}),
+        chip("Election Day · "+ed, state.kind==="election-day", ()=>{state.kind="election-day"; render()}),
+        chip("St. Tammany", state.parish==="St. Tammany", ()=>{state.parish=state.parish==="St. Tammany"?"all":"St. Tammany"; render()}),
+        chip("Washington", state.parish==="Washington", ()=>{state.parish=state.parish==="Washington"?"all":"Washington"; render()}),
+      );
+      const loc=document.createElement("button");
+      loc.className="locate"; loc.textContent="Near me";
+      loc.onclick=()=>{
+        if(!navigator.geolocation){state.locError="Location is not available in this browser."; render(); return;}
+        navigator.geolocation.getCurrentPosition(
+          p=>{state.userLoc={lat:p.coords.latitude,lng:p.coords.longitude}; state.locError=null; render();},
+          ()=>{state.locError="Could not read your location."; render();},
+          {enableHighAccuracy:true,timeout:8000}
+        );
+      };
+      chips.appendChild(loc);
+      wrap.appendChild(chips);
+      const meta=document.createElement("p");
+      meta.className="meta"+(state.locError?" err":"");
+      const n=filtered().length;
+      meta.textContent=state.locError || (n+" location"+(n===1?"":"s")+" shown");
+      wrap.appendChild(meta);
+      return wrap;
+    }
+    function renderFilters(){
+      const m=document.getElementById("filters-m");
+      const d=document.getElementById("filters-d");
+      m.innerHTML=""; d.innerHTML="";
+      m.appendChild(filtersEl());
+      d.appendChild(filtersEl());
+    }
+    function renderList(){
+      const rows=filtered();
+      const list=document.getElementById("list");
+      list.innerHTML="";
+      for(const s of rows){
+        const b=document.createElement("button");
+        b.className="card"+(s.id===state.selectedId?" sel":"");
+        b.onclick=()=>{state.selectedId=s.id; render();};
+        const milesTxt=s.miles!=null? '<span class="miles">'+s.miles.toFixed(1)+' mi</span>':"";
+        b.innerHTML=milesTxt
+          +'<span class="badge '+(s.kind==="early"?"ev":"ed")+'">'+(s.kind==="early"?"Early voting":"Election Day")+'</span>'
+          +'<span class="badge ed">'+s.parish+'</span>'
+          +'<p class="name"></p><p class="addr"></p>';
+        b.querySelector(".name").textContent=s.name;
+        b.querySelector(".addr").textContent=s.address+", "+s.city+", LA "+s.zip;
+        list.appendChild(b);
+      }
+      const det=document.getElementById("detail");
+      const sel=SITES.find(s=>s.id===state.selectedId);
+      if(!sel){det.innerHTML=""; return;}
+      const maps="https://www.google.com/maps/dir/?api=1&destination="+encodeURIComponent(sel.address+", "+sel.city+", LA "+sel.zip);
+      const prec=sel.precincts.length? "<p class='addr'>Precincts: "+sel.precincts.join(", ")+"</p>":"";
+      det.innerHTML='<div class="detail"><span class="badge '+(sel.kind==="early"?"ev":"ed")+'">'+(sel.kind==="early"?"Early voting":"Election Day")+'</span>'
+        +'<h2></h2><p class="addr"></p>'+prec
+        +(sel.hours?'<p class="addr">'+sel.hours+"</p>":"")
+        +(sel.phone?'<p class="addr">'+sel.phone+"</p>":"")
+        +(sel.notes?'<p class="addr">'+sel.notes+"</p>":"")
+        +'<a class="dir" target="_blank" rel="noreferrer" href="'+maps+'">Directions</a></div>';
+      det.querySelector("h2").textContent=sel.name;
+      det.querySelector(".addr").textContent=sel.address+(sel.suite?", "+sel.suite:"")+", "+sel.city+", LA "+sel.zip;
+    }
+    function pinIcon(site, selected){
+      const cls=["ns-pin", site.kind==="early"?"is-ev":"is-ed", site.parish==="Washington"?"is-wa":"is-st", selected?"is-selected":""].join(" ");
+      return L.divIcon({className:"", html:'<div class="'+cls+'"><span></span></div>', iconSize:[28,28], iconAnchor:[14,14]});
+    }
+    function renderMap(){
+      if(!map){
+        map=L.map("map",{zoomControl:false, attributionControl:true}).setView([30.52,-89.95],10);
+        L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",{
+          attribution:"&copy; OpenStreetMap &copy; CARTO", maxZoom:19
+        }).addTo(map);
+        L.control.zoom({position:"bottomright"}).addTo(map);
+        layer=L.layerGroup().addTo(map);
+        setTimeout(()=>map.invalidateSize(),80);
+      }
+      layer.clearLayers();
+      const rows=filtered();
+      for(const s of rows){
+        const m=L.marker([s.lat,s.lng],{icon:pinIcon(s,s.id===state.selectedId), zIndexOffset:s.id===state.selectedId?800:0});
+        m.on("click",()=>{state.selectedId=s.id; render();});
+        m.addTo(layer);
+      }
+      const sel=SITES.find(s=>s.id===state.selectedId);
+      if(sel) map.flyTo([sel.lat,sel.lng], Math.max(map.getZoom(),13), {duration:.4});
+      map.invalidateSize();
+    }
+    function render(){ renderFilters(); renderList(); renderMap(); }
+    render();
+    addEventListener("resize", ()=>map && map.invalidateSize());
+  </script>
+</body>
+</html>
